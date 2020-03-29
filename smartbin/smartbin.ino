@@ -1,45 +1,44 @@
-/*   
- *   servo 
- */
-#include <Servo.h>
-Servo servo_test;        //initialize a servo object for the connected servo
-const int Pin_D0 = 16;
-int angle = 0;
+#include <ESP8266WiFi.h>
+#include <WiFiManager.h>
+#include <ESP8266HTTPClient.h>
+#include <LiquidCrystal_I2C.h> // liquid crystal display with i2c backpack (in progress)
+#include <Wire.h> //i2c communication
+#include <Servo.h> 
+#include "HX711.h" // load cell using a hx711 amplifier
+#include "settings.h" 
+#include "config.h" 
+
+HX711 scale; // load cell amp
+Servo servo_test; //initialize a servo object
+int servo_angle = 0;
+long oldTime = 0;
+String chipID;
+String serverURL = SERVER_URL;
+long currentMillis = 0;
 
 /*   
- *   load cell using a hx711 amplifier (circuit wiring)
+ *   connect to internet
  */
-#include "HX711.h"
-HX711 scale;
-const int LOADCELL_DOUT_PIN = 12;
-const int LOADCELL_SCK_PIN = 14;
+void connectToDefault() {
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(BACKUP_SSID, BACKUP_PASSWORD);
 
-/*   
- *   ultrasonic sensor
- */
-const unsigned int TRIG_PIN=13;
-const unsigned int ECHO_PIN=15;
+  int timer = 0;
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+    timer += 500;
+    if (timer > 10000)
+      break;
+  }
 
-/*   
- *   infra red sensor
- */
-#define ir A0
-long Value_IR_A0 = 0;
-
-/*   
- *   liquid crystal display with i2c backpack (in progress)
- */
-#include <LiquidCrystal_I2C.h>
-
-/*   
- *   i2c communication
- */
-#include <Wire.h>
-
-/*   
- *   variables
- */
- bool runOnce = true;
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("");
+    Serial.println("WiFi connected");
+    Serial.println("IP address: ");
+    Serial.println(WiFi.localIP());
+  }
+}
 
 /*   
  *   first time setup
@@ -48,11 +47,24 @@ void setup()
 {
   // essentials
   Serial.begin(115200); // starts the serial monitor
-  //servo_test.attach(Pin_D0); // attach the signal pin of servo to d1 of arduino
+  servo_test.attach(SERVO_PIN); // attach the signal pin of servo to d1 of arduino
   scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN); // initiate scale with the correct pins
+  
   // set pins for ultrasonic sensor
   pinMode(TRIG_PIN, OUTPUT);
   pinMode(ECHO_PIN, INPUT);
+
+  WiFiManager wifiManager;
+  chipID = generateChipID();
+  String configSSID = String(CONFIG_SSID) + "_" + chipID;
+  
+  connectToDefault(); 
+  wifiManager.autoConnect(configSSID.c_str());
+
+  //HTTPClient http;
+  //http.begin(serverURL + "add_device.php?device_id=" + chipID);
+  //uint16_t httpCode = http.GET();
+  //http.end();
 }
 
 /* 
@@ -60,7 +72,24 @@ void setup()
  */ 
 void loop()
 {
- 
+ //Serial.println(getWeight());
+ //delay(1000);
+
+  currentMillis = millis();
+  //Every requestDelay, send a request to the server
+  if (currentMillis > oldTime + REQUEST_DELAY)
+  {
+    Serial.println("");
+    Serial.println("/ Sending Diaganostics /");
+    sendSensorData();
+    oldTime = currentMillis;
+  }
+}
+
+void sendSensorData() {
+  Serial.print("Weight: "); Serial.println(getWeight());
+  Serial.print("Height: "); Serial.println(getUssDistance());
+  Serial.print("IR Distance: "); Serial.println(getIrDistance());
 }
 
 /* 
@@ -68,8 +97,7 @@ void loop()
  */
 long getIrDistance() {
   // get distance value max 1024
-  Value_IR_A0 = analogRead(ir);
-  return analogRead(ir);
+  return analogRead(IR_PIN);
 }
 
 /* 
@@ -92,9 +120,7 @@ long getUssDistance() {
    return 0;
   } 
   else{
-      Serial.print("distance to nearest object:");
-      Serial.print(distance);
-      Serial.println(" cm");
+      // distance in cm
       return distance;
   }
 }
@@ -105,7 +131,6 @@ long getUssDistance() {
 long getWeight() {
   if (scale.is_ready()) {
     long reading = scale.read();
-    Serial.print("HX711 reading: ");
     return reading;
   } else {
     Serial.println("HX711 not found.");
@@ -113,62 +138,40 @@ long getWeight() {
   }
 }
 
-
-/* 
- *  open can, wait for trash
- */
-void catchTrash() {
-
-}
-
 /* 
  *  open can, wait for trash
  */
 void openTrashCan() {
-  for(angle = 0; angle < 180; angle += 1)    // command to move from 0 degrees to 180 degrees 
+  for(servo_angle = 0; servo_angle < 180; servo_angle += 1)    // command to move from 0 degrees to 180 degrees 
   {      
-    Serial.println(angle);                            
-    servo_test.write(angle);                 //command to rotate the servo to the specified angle
+    Serial.println(servo_angle);                            
+    servo_test.write(servo_angle);                 //command to rotate the servo to the specified angle
     delay(50);                       
   } 
 }
 
 /* 
- *  function
+ *  close can
  */
 void closeTrashCan() {
-  for(angle = 0; angle < 180; angle += 1)    // command to move from 0 degrees to 180 degrees 
+  for(servo_angle = 0; servo_angle < 180; servo_angle += 1)    // command to move from 0 degrees to 180 degrees 
   {      
-    Serial.println(angle);                            
-    servo_test.write(angle);                 //command to rotate the servo to the specified angle
+    Serial.println(servo_angle);                            
+    servo_test.write(servo_angle);                 //command to rotate the servo to the specified angle
     delay(50);                       
   } 
 }
 
 /* 
- *  check the height of the pile using using infrared sensor or ultrasonic sensor
+ *  generate chip id 
  */
-void checkHeight() {
+String generateChipID()
+{
+  String chipIDString = String(ESP.getChipId() & 0xffff, HEX);
 
-}
+  chipIDString.toUpperCase();
+  while (chipIDString.length() < 4)
+    chipIDString = String("0") + chipIDString;
 
-/* 
- *  check the weight of the pile using a load sensor
- */
-void checkWeight() {
-  
-}
-
-/* 
- *  display nessecary information on lcd display // still difficult
- */
-void displayLCD() {
- 
-}
-
-/* 
- *  reset trash weight and height
- */
-void resetSettings() {
-
+  return chipIDString;
 }
