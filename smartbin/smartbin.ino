@@ -15,6 +15,7 @@ long oldTime = 0;
 String chipID;
 String serverURL = SERVER_URL;
 long currentMillis = 0;
+LiquidCrystal_I2C lcd(0x27,20,4); // set the LCD address to 0x3F for a 16 chars and 2 line display
 
 /*   
  *   connect to internet
@@ -60,6 +61,29 @@ void setup()
   
   connectToDefault(); 
   wifiManager.autoConnect(configSSID.c_str());
+
+  // initialize LCD
+  lcd.init();
+  // turn on LCD backlight                      
+  lcd.backlight();
+
+  // set cursor to first column, first row
+  lcd.setCursor(0, 0);
+  // print message
+  lcd.print("Hey, je ziet er leuk uit vandaag!");
+  // set cursor to first column, second row
+  lcd.setCursor(0,1);
+  lcd.print("Nee grapje, ga naar je vuilnisbak :)");
+    lcd.setCursor(0, 2);
+  // print message
+  lcd.print("Hey, je ziet er leuk uit vandaag!");
+  // set cursor to first column, second row
+  lcd.setCursor(0,3);
+  lcd.print("Nee grapje, ga naar je vuilnisbak :)");
+  
+  
+
+ 
 
   //HTTPClient http;
   //http.begin(serverURL + "add_device.php?device_id=" + chipID);
