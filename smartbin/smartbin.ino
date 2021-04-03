@@ -70,25 +70,19 @@ void setup()
   // set cursor to first column, first row
   lcd.setCursor(0, 0);
   // print message
-  lcd.print("Hey, je ziet er leuk uit vandaag!");
-  // set cursor to first column, second row
-  lcd.setCursor(0,1);
-  lcd.print("Nee grapje, ga naar je vuilnisbak :)");
-    lcd.setCursor(0, 2);
+  lcd.print("Test");
+
+  lcd.setCursor(0, 1);
   // print message
-  lcd.print("Hey, je ziet er leuk uit vandaag!");
+  lcd.print(":)");
+
+  lcd.setCursor(0, 2);
+  // print message
+  lcd.print("Have a nice day!");
+  
   // set cursor to first column, second row
   lcd.setCursor(0,3);
-  lcd.print("Nee grapje, ga naar je vuilnisbak :)");
-  
-  
-
- 
-
-  //HTTPClient http;
-  //http.begin(serverURL + "add_device.php?device_id=" + chipID);
-  //uint16_t httpCode = http.GET();
-  //http.end();
+  lcd.print("Rico Coelen");
 }
 
 /* 
@@ -105,16 +99,36 @@ void loop()
   {
     Serial.println("");
     Serial.println("/ Sending Diaganostics /");
-    sendSensorData();
+  
+    if (WiFi.status() == WL_CONNECTED) {
+      
+       HTTPClient http;    //Declare object of class HTTPClient
+       http.begin("http://893e51880773.ngrok.io/?weight=" + String(getWeight()) + "&irdistance=" + String(getUssDistance()) + "&sdistance=" + String(getIrDistance()) + "&chipid=" + String(chipID));      //Specify request destination
+       int httpCode = http.GET(); 
+       String payload = http.getString();                  //Get the response payload 
+       if (httpCode > 0) { //Check for the returning code
+ 
+        String payload = http.getString();
+        Serial.println(httpCode);
+        Serial.println(payload);
+      }
+      else {
+        Serial.println("Error on HTTP request");
+        Serial.println(httpCode);
+        Serial.println(payload);
+      }
+    
+       http.end();  //Close connection
+    }
+    
+    Serial.print("Weight: "); Serial.println(getWeight());
+    Serial.print("Height: "); Serial.println(getUssDistance());
+    Serial.print("IR Distance: "); Serial.println(getIrDistance());
+
     oldTime = currentMillis;
   }
 }
 
-void sendSensorData() {
-  Serial.print("Weight: "); Serial.println(getWeight());
-  Serial.print("Height: "); Serial.println(getUssDistance());
-  Serial.print("IR Distance: "); Serial.println(getIrDistance());
-}
 
 /* 
  *  check infrared sensor if somthing is near
